@@ -1,0 +1,14 @@
+		mov		r0, #536870912		;	valor inicial da progressao
+		mov		r1, #800			; 	endereço de memoria que armazena o inicio da progressao
+		mov		r2, #10			;	quantidade de numeros na progressao
+		str		r0, [r1]			;	armazena o valor deslocado na memoria
+		mov		r8, r0			; 	armazena o ultimo valor deslocado no registrador 8
+		add		r1, r1, #4		;	atualiza o proximo endereço
+		sub		r2, r2, #1		;	r2--;
+		lsl		r0, r0, #1		; 	r0 = r0 << 1;
+		cmp		r0, #2147483649	;	compara se o numero é maior que 2147483649
+		addlt	pc, pc, #4		;	se for maior pula para o fim
+		tst		r2, #15			;	checa se r2 é 0
+		subne	pc,pc,#40			; 	final do for
+		mov		r0,r0
+		
