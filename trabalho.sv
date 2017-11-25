@@ -101,7 +101,7 @@ module testbench();
     begin
       if(MemWrite) begin
         if(DataAdr === 100 & WriteData === 7) begin
-          $display("Simulation succeeded");
+          $display("Simulation succeeded!!!");
           $stop;
         end else if (DataAdr !== 96) begin
           $display("Simulation failed");
@@ -181,16 +181,17 @@ module controller(input  logic         clk, reset,
                   output logic [1:0]   ALUControl,
                   output logic         MemWrite, MemtoReg,
                   output logic         PCSrc);
-
+		  
+ 
   logic [1:0] FlagW;
-  logic       PCS, RegW, MemW;
+  logic       PCS, RegW, MemW, NoWrite;
   
   decoder dec(Instr[27:26], Instr[25:20], Instr[15:12],
               FlagW, PCS, RegW, MemW,
-              MemtoReg, ALUSrc, ImmSrc, RegSrc, ALUControl);
+              MemtoReg, ALUSrc, ImmSrc, RegSrc, ALUControl, NoWrite);
   condlogic cl(clk, reset, Instr[31:28], ALUFlags,
                FlagW, PCS, RegW, MemW,
-               PCSrc, RegWrite, MemWrite);
+               PCSrc, RegWrite, MemWrite, NoWrite);
 endmodule
 
 module decoder(input  logic [1:0] Op,
@@ -199,9 +200,9 @@ module decoder(input  logic [1:0] Op,
                output logic [1:0] FlagW,
                output logic       PCS, RegW, MemW,
                output logic       MemtoReg, ALUSrc,
-               output logic [1:0] ImmSrc, RegSrc, ALUControl);
-
-  logic [9:0] controls;
+               output logic [1:0] ImmSrc, RegSrc, ALUControl,  
+  	       output logic       NoWrite); //create NoWrite to prevent writing Rd during CMP.
+logic [9:0] controls;
   logic       Branch, ALUOp;
 
   // Main Decoder
@@ -229,12 +230,41 @@ module decoder(input  logic [1:0] Op,
   always_comb
     if (ALUOp) begin                 // which DP Instr?
       case(Funct[4:1]) 
-  	    4'b0100: ALUControl = 2'b00; // ADD
-  	    4'b0010: ALUControl = 2'b01; // SUB
-          4'b0000: ALUControl = 2'b10; // AND
-  	    4'b1100: ALUControl = 2'b11; // ORR
-  	    default: ALUControl = 2'bx;  // unimplemented
-      endcase
+
+	    4'b0100: 			//ADD
+	begin
+		     ALUControl = 2'b00;
+		     NoWrite =1'b0;
+	end
+  	    4'b0010: 			// SUB
+	begin	  
+		     ALUControl = 2'b01;
+   		     NoWrite = 1'b0;
+	end 
+ 	    4'b0000:			// AND 
+	begin
+	              ALUControl = 2'b10;
+		      NoWrite = 1'b0;
+	end   
+ 	    4'b1100:			// ORR
+	begin
+		       ALUControl = 2'b11;
+		       NoWrite = 1'b0;
+	end			
+	    4'b1010:
+	begin 
+		     ALUControl = 2'b01;			// CMP
+	    	     NoWrite=1'b1;
+	end
+	
+	default: 
+	begin
+	             ALUControl = 2'bx;  // unimplemented
+       		     NoWrite=1'b0;
+	end
+  endcase
+
+	
       // update flags if S bit is set 
 	// (C & V only updated for arith instructions)
       FlagW[1]      = Funct[0]; // FlagW[1] = S-bit
@@ -255,8 +285,8 @@ module condlogic(input  logic       clk, reset,
                  input  logic [3:0] ALUFlags,
                  input  logic [1:0] FlagW,
                  input  logic       PCS, RegW, MemW,
-                 output logic       PCSrc, RegWrite, MemWrite);
-                 
+                 output logic       PCSrc, RegWrite, MemWrite,
+                 input logic	    NoWrite); //acrescentado Nowrite como entrada
   logic [1:0] FlagWrite;
   logic [3:0] Flags;
   logic       CondEx;
@@ -269,7 +299,7 @@ module condlogic(input  logic       clk, reset,
   // write controls are conditional
   condcheck cc(Cond, Flags, CondEx);
   assign FlagWrite = FlagW & {2{CondEx}};
-  assign RegWrite  = RegW  & CondEx;
+  assign RegWrite  = ~NoWrite & RegW  & CondEx;//acrescentado a porta AND o NoWrite Negado
   assign MemWrite  = MemW  & CondEx;
   assign PCSrc     = PCS   & CondEx;
 endmodule    
@@ -413,7 +443,6 @@ module mux2 #(parameter WIDTH = 8)
 
   assign y = s ? d1 : d0; 
 endmodule
-
 
 module alu(input  logic [31:0] a, b,
            input  logic [1:0]  ALUControl,
